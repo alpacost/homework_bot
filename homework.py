@@ -54,7 +54,9 @@ def get_api_answer(current_timestamp):
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
-        homework_status = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        homework_status = requests.get(ENDPOINT,
+                                       headers=HEADERS,
+                                       params=params)
         if str(homework_status.status_code)[0] == '5':
             raise Exception('Эндпоинт недоступен')
         if homework_status.status_code != HTTPStatus.OK:
@@ -66,10 +68,14 @@ def get_api_answer(current_timestamp):
 
 def check_response(response):
     """Проверить ответ api на корректность."""
-    if not isinstance(response['homeworks'], list):
+    if not isinstance(response['homeworks'],
+                      list):
         logging_message('Отсутствие ожидаемого типа в ответе API')
-    if not isinstance(response, dict):  # Не проходит тесты если сначала проверять на словарь
-        logging_message('Отсутствие ожидаемого типа в ответе API (response не словарь)')
+    if not isinstance(response, dict):
+        # Не проходит тесты если сначала проверять на словарь
+        logging_message(
+            'Отсутствие ожидаемого типа в ответе API (response не словарь)'
+        )
     return response['homeworks']
 
 
