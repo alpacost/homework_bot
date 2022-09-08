@@ -23,7 +23,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 handler_1 = logging.StreamHandler(stream=sys.stdout)
 logger.addHandler(handler_1)
 
@@ -53,25 +53,30 @@ def get_api_answer(current_timestamp):
     """Запросить к api."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
-    homework_status = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    if str(homework_status.status_code)[0] == '5':
-        logging_message('Эндпоинт недоступен')
-    if homework_status.status_code != HTTPStatus.OK.value:
-        logging_message('Сбой при запросе к эндпоинту')
-    return homework_status.json()
+    try:
+        homework_status = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        if str(homework_status.status_code)[0] == '5':
+            raise Exception('Эндпоинт недоступен')
+        if homework_status.status_code != HTTPStatus.OK:
+            raise Exception('Сбой при запросе к эндпоинту')
+        return homework_status.json()
+    except Exception as error:
+        logging_message(str(error))
 
 
 def check_response(response):
     """Проверить ответ api на корректность."""
-    if isinstance(response['homeworks'], list) is False:
+    if not isinstance(response['homeworks'], list):
         logging_message('Отсутствие ожидаемого типа в ответе API')
-    if response['homeworks']:
-        return response['homeworks']
-    logger.debug('Нет новых статусов')
+    if not isinstance(response, dict):  # Не проходит тесты если сначала проверять на словарь
+        logging_message('Отсутствие ожидаемого типа в ответе API (response не словарь)')
+    return response['homeworks']
 
 
 def parse_status(homework):
     """Извлечь статус работы."""
+    if not homework:
+        logger.debug('Нет новых статусов')
     if 'homework_name' not in homework:
         raise KeyError('homework_name')
     homework_name = homework.get('homework_name')
@@ -91,7 +96,7 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверить доступность переменной окружения."""
-    tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
+    tokens = (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
     return all(tokens)
 
 
@@ -106,9 +111,12 @@ def main():
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
-            for homework in homeworks:
-                message = parse_status(homework)
-                send_message(bot, message)
+            if homeworks and homeworks is not None:
+                for homework in homeworks:
+                    message = parse_status(homework)
+                    send_message(bot, message)
+            else:
+                logger.debug('Нет новых статусов')
             current_timestamp = int(time.time())
             time.sleep(RETRY_TIME)
 
