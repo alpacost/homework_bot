@@ -34,12 +34,6 @@ HOMEWORK_STATUSES = {
 }
 
 
-def logging_message(message):
-    """Делает запись в логе и вызывает ошибку."""
-    logger.error(message)
-    raise ErrorException(message)
-
-
 def send_message(bot, message):
     """Отправить сообщение."""
     try:
@@ -57,25 +51,24 @@ def get_api_answer(current_timestamp):
         homework_status = requests.get(ENDPOINT,
                                        headers=HEADERS,
                                        params=params)
-        if str(homework_status.status_code)[0] == '5':
-            raise Exception('Эндпоинт недоступен')
-        if homework_status.status_code != HTTPStatus.OK:
-            raise Exception('Сбой при запросе к эндпоинту')
-        return homework_status.json()
     except Exception as error:
-        logging_message(str(error))
+        raise ErrorException(str(error))
+    if str(homework_status.status_code)[0] == '5':
+        raise ErrorException('Эндпоинт недоступен')
+    if homework_status.status_code != HTTPStatus.OK:
+        raise ErrorException('Сбой при запросе к эндпоинту')
+    return homework_status.json()
 
 
 def check_response(response):
     """Проверить ответ api на корректность."""
-    if not isinstance(response['homeworks'],
-                      list):
-        logging_message('Отсутствие ожидаемого типа в ответе API')
     if not isinstance(response, dict):
-        # Не проходит тесты если сначала проверять на словарь
-        logging_message(
+        raise TypeError(
             'Отсутствие ожидаемого типа в ответе API (response не словарь)'
         )
+    if not isinstance(response['homeworks'],
+                      list):
+        raise TypeError('Отсутствие ожидаемого типа в ответе API')
     return response['homeworks']
 
 
@@ -92,12 +85,12 @@ def parse_status(homework):
     try:
         verdict = HOMEWORK_STATUSES.get(homework_status)
         if verdict is None:
-            logging_message('Недокументированный статус домашней работы')
+            raise ErrorException('Недокументированный статус домашней работы')
         return f'Изменился статус проверки работы "{homework_name}". {verdict}'
     except TypeError:
-        logging_message('Отсутствие ключа домашней работы')
+        raise ErrorException('Отсутствие ключа домашней работы')
     except KeyError as error:
-        logging_message(f'{error}отсутсвует в списке')
+        raise ErrorException(f'{error}отсутсвует в списке')
 
 
 def check_tokens():
@@ -127,11 +120,16 @@ def main():
             time.sleep(RETRY_TIME)
 
         except ErrorException as error:
+            logger.error(error)
             message = f'Сбой в работе программы: {error}'
             send_message(bot, message)
             current_timestamp = int(time.time())
             time.sleep(RETRY_TIME)
-
+        except TypeError as error:
+            logger.error(error)
+            send_message(bot, error)
+            current_timestamp = int(time.time())
+            time.sleep(RETRY_TIME)
         except Exception:
             current_timestamp = int(time.time())
             time.sleep(RETRY_TIME)
